@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+title: HuntingTool
+message: "If you use HuntingTool, please cite this software."
+type: software
+authors:
+  - name: HuntingTool contributors
+version: 1.0.0
+date-released: 2026-06-12
+repository-code: "https://github.com/YOUR-USERNAME/HuntingTool"
+abstract: "Python/Tkinter tool for HTT CAG repeat sizing and CAA interruption analysis from FASTQ/FASTQ.GZ reads."
+license: MIT
