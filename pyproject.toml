@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "huntingtool"
+version = "2.0.0"
+description = "Sequence-resolved HTT CAG-repeat genotyping and repeat-adjacent variant phasing from amplicon long reads"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+authors = [{ name = "Marco Fabiani" }]
+keywords = ["huntington-disease", "HTT", "CAG repeat", "nanopore", "short tandem repeats", "bioinformatics"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Topic :: Scientific/Engineering :: Bio-Informatics",
+  "Intended Audience :: Science/Research",
+]
+dependencies = ["matplotlib>=3.5"]
+
+[project.optional-dependencies]
+fast = ["isal>=1.0"]
+test = ["pytest>=7"]
+
+[project.scripts]
+huntingtool = "huntingtool.cli:main"
+
+[project.gui-scripts]
+huntingtool-gui = "huntingtool.gui:main"
+
+[project.urls]
+Homepage = "https://github.com/Igenetici/HuntingTool"
+
+[tool.setuptools]
+packages = ["huntingtool"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
