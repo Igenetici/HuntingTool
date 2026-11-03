@@ -1,11 +1,17 @@
 cff-version: 1.2.0
 title: HuntingTool
-message: "If you use HuntingTool, please cite this software."
+message: "If you use HuntingTool, please cite this software and the accompanying article."
 type: software
 authors:
-  - name: HuntingTool contributors
-version: 1.0.0
-date-released: 2026-06-12
-repository-code: "https://github.com/YOUR-USERNAME/HuntingTool"
-abstract: "Python/Tkinter tool for HTT CAG repeat sizing and CAA interruption analysis from FASTQ/FASTQ.GZ reads."
+  - family-names: Fabiani
+    given-names: Marco
+version: 2.0.0
+date-released: 2026-11-04
+repository-code: "https://github.com/Igenetici/HuntingTool"
+abstract: "Sequence-resolved HTT CAG-repeat genotyping and repeat-adjacent variant phasing from amplicon long reads (GUI and command line)."
+keywords:
+  - Huntington disease
+  - HTT
+  - CAG repeat
+  - Oxford Nanopore
 license: MIT
