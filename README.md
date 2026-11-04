@@ -82,7 +82,7 @@ Without installing, replace `huntingtool` with `python huntingtool.py`. All opti
 | `--min-length` | 100 | minimum read length (bp) |
 | `--max-length` | 0 | maximum read length (0 = no limit) |
 | `--min-q` | 0 | minimum mean read Phred quality (0 = no filter) |
-| `--min-allele-fraction` | 0.10 | minimum fraction of resolved reads supporting an allele |
+| `--min-allele-fraction` | 0.05 | minimum fraction of resolved reads supporting an allele |
 | `--min-reads` | 10 | minimum reads supporting an allele |
 | `-t / --threads` | CPUs − 1 | samples analysed in parallel |
 | `--write-reads` | off | write `reads.tsv.gz` (one row per read) |
@@ -127,9 +127,10 @@ Nomenclature follows the GeM-HD Consortium (*Nat Genet* 2025).
 
 1. Each read is oriented on the *HTT* sense strand and anchored on the 12-nt flank immediately upstream of the CAG tract (CTCAAGTCCTTC; one mismatch tolerated), on the start of the CCG repeat, and on the downstream CCT sequence.
 2. The sequence between the flank and the CCG repeat is split into the CAG tract and the repeat-adjacent sequence. The adjacent sequence is identified by exact matching of the known configurations, preceded by at least two CAG codons. The CAG length is the length of the tract divided by three and rounded, which tolerates isolated basecalling errors inside long tracts. Reads whose junction cannot be resolved exactly are counted but are not used to assign configurations.
-3. Alleles are the modes of the CAG distribution of reads with a resolved configuration. Raw counts are used up to 35 repeats; smoothed counts are used above 35, where the distributions are broader.
-4. Within each mode, the configuration and the CCG length are taken by majority. A mode is split into two alleles when two configurations or two CCG lengths are each supported by at least 25% of its reads.
-5. An allele is called when it is supported by at least 10% of resolved reads (and at least 10 reads). At most two alleles are reported; additional candidates are listed in the notes.
+3. Allele discovery is done separately within each repeat-adjacent configuration, so alleles with different configurations are never merged. Candidate alleles are the modes of the CAG distribution (raw counts up to 35 repeats; smoothed counts above 35, where distributions are broader). Each mode is scored by the reads within ±1 CAG (±2 above 35 CAG), so the broad left tail produced by PCR stutter and truncated products of a long allele does not inflate the support of a shorter allele.
+4. An allele is called when its score reaches 5% of resolved reads (and at least 10 reads); at most two alleles are reported and additional modes are listed in the notes. A minor mode of a non-canonical configuration lying within 3 CAG of a mode at least five times larger is treated as a configuration miscall (a single basecalling error in the CAA or CCA codon) and is not called.
+5. The CCG length of each allele is the majority CCG length of its reads (flagged when supported by <60% of them). When a single CAG mode is found, it is split into two alleles if its reads show two CCG lengths at least two repeats apart, each with ≥25% of the reads (alleles of equal or adjacent CAG length distinguished by CCG). When two CAG modes are present no CCG split is attempted, because recombinant (chimeric) PCR products carry the CAG tract of one allele and the CCG tract of the other.
+6. For alleles ≤35 CAG, a neighbouring bin reaching 60% of the mode is flagged as a possible second allele differing by one repeat.
 
 On simulated amplicon reads (random indels and substitutions, both strands, unbalanced alleles), the exact genotype, configuration and CCG were recovered in 100% of heterozygous cases at 2% and 5% per-base error. At 8% error, most discrepancies were ±1 repeat on expanded alleles. Run `pytest` to reproduce the tests.
 

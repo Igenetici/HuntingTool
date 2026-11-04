@@ -12,8 +12,8 @@ steps = [
     ("Anchoring", "5′ flank CTCAAGTCCTTC  ·  start of the CCG repeat  ·  CCT anchor"),
     ("Read structure", "(CAG)n  |  repeat-adjacent sequence  |  (CCG)m\nCAG length = anchor-to-anchor distance / 3 (tolerant to isolated errors)"),
     ("Configuration", "canonical · CAA-loss · CCA-loss · CAACAGCCGCCA-loss ·\nCAACAG-duplication (G2) · CAA-gain G1, G3–G8 · unresolved"),
-    ("Allele discovery", "modes of the CAG distribution of reads with a resolved configuration\n(minimum 10% of reads per allele)"),
-    ("Phasing", "configuration and CCG length of each allele by majority of its reads;\nsplit when two configurations or CCG lengths are both supported"),
+    ("Allele discovery", "CAG modes searched within each configuration; each mode scored on\nreads within ±1 CAG (±2 above 35); ≥5% of resolved reads, max. two alleles"),
+    ("Phasing", "CCG length of each allele by majority of its reads; a single CAG mode is\nsplit by CCG (two alleles of equal/adjacent CAG); chimeric reads ignored"),
     ("Output", "summary.tsv · result.json · haplotype counts · HTML report with\nCAG, CAG×CCG, read-length and parsing-status plots"),
 ]
 fig, ax = plt.subplots(figsize=(7.2, 9.6), dpi=200)

@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.1.0 - 2026-11
+
+Allele caller revised after re-analysis of the study datasets (R10.4.1, 63 barcodes).
+
+- CAG modes are searched separately within each repeat-adjacent configuration and scored on the reads within ±1 CAG (±2 above 35 CAG), so the broad stutter/truncation tail of a long allele no longer inflates or masks a neighbouring short allele.
+- No CCG-based split when two CAG modes are present: recombinant (chimeric) PCR products carrying the CAG tract of one allele and the CCG tract of the other no longer produce spurious third alleles. A single CAG mode is still split when two CCG lengths ≥2 repeats apart are both supported.
+- Default minimum allele fraction lowered from 10% to 5% of resolved reads; low-height modes are retained as candidates, so under-amplified long alleles (e.g. >80 CAG) are called.
+- Minor non-canonical modes within 3 CAG of a ≥5-fold larger mode are treated as configuration miscalls.
+- Repeat-adjacent sequences that match no known configuration but are carried by ≥20% of resolved reads are reported as alleles with an "unclassified" configuration (sequence shown).
+- New note when the CAG mode differs between CCG classes of a single called allele (evidence for two alleles one repeat apart).
+- Neighbour-bin flag restricted to alleles ≤35 CAG; CCG call flagged when supported by <60% of the allele's reads.
+- New unit tests reproducing the read-count patterns observed in real data.
+
 ## 2.0.0 - 2026-11
 
 Complete rewrite.
