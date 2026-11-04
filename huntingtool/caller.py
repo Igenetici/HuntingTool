@@ -69,6 +69,18 @@ def _nearest(x, peaks):
     return min(peaks, key=lambda q: abs(q - x))
 
 
+def _caa_shift(adj: str) -> Optional[int]:
+    """CAG gain of the canonical read produced by a CAA>CAG error in the first CAA codon of a
+    CAA-gain adjacent sequence (CAACAG-duplication: 2; CAA-gain Gk: k); None otherwise."""
+    from .structure import CANONICAL_ADJ
+    if not adj.startswith("CAA") or adj == CANONICAL_ADJ:
+        return None
+    conv = "CAG" + adj[3:]
+    if conv.endswith(CANONICAL_ADJ) and len(conv) > len(CANONICAL_ADJ):
+        return (len(conv) - len(CANONICAL_ADJ)) // 3
+    return None
+
+
 def _window(dist: Counter, x: int, w: int) -> int:
     return sum(dist[y] for y in range(x - w, x + w + 1))
 
@@ -156,6 +168,10 @@ def call_alleles(hap_counts: Counter, adj_of: dict, min_fraction: float = 0.05,
             continue
         miscall = any(cfg != "canonical" and acfg != cfg and abs(apk - pk) <= 3 and s < config_error_ratio * asup
                       for asup, acfg, apk in accepted)
+        # a single CAA>CAG basecalling error in the first CAA codon of a CAA-gain allele
+        # (e.g. CAACAG-duplication) yields a canonical read k repeats longer
+        miscall = miscall or any(cfg == "canonical" and _caa_shift(adj_of.get(acfg, "")) == pk - apk
+                                 and s < config_error_ratio * asup for asup, acfg, apk in accepted)
         if miscall or len(accepted) == 2:
             others.append((s, cfg, pk))
         else:

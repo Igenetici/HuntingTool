@@ -61,3 +61,10 @@ def test_adjacent_alleles_shift_between_ccg_classes_noted():
     h = _stutter(16, 10, 800) + _stutter(17, 9, 1000)
     al, notes = call_alleles(h, ADJ)
     assert any("CAG mode differs between CCG classes" in n or len(al) == 2 for n in notes)
+
+
+def test_dup_conversion_product_not_called():
+    # CAACAG-dup 15 + canonical 20; A>G errors in the first CAA of the dup allele give canonical 17 reads
+    h = _stutter(15, 8, 1800, cfg="CAACAG-dup", tail=0.3) + _stutter(17, 8, 210, tail=0.6) + _stutter(20, 7, 180)
+    al, notes = call_alleles(h, {"canonical": "CAACAGCCGCCA", "CAACAG-dup": "CAACAGCAACAGCCGCCA"})
+    assert [(a.cag, a.config) for a in al] == [(15, "CAACAG-dup"), (20, "canonical")]
