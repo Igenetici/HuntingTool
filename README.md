@@ -6,7 +6,20 @@ It runs from a **graphical interface** or from the **command line**, on Linux, m
 
 > Research use. Results must be interpreted by qualified personnel and, when clinically relevant, confirmed with validated diagnostic methods.
 
-## What's new in version 2.0
+## What's new in version 2.1
+
+The allele caller was revised after re-analysis of the study datasets (R10.4.1, 63 barcodes):
+
+- CAG modes are searched separately within each repeat-adjacent configuration and scored on the reads within ±1 CAG (±2 above 35 CAG), so the stutter/truncation tail of a long allele no longer inflates or masks a neighbouring short allele.
+- No CCG-based split when two CAG modes are present: recombinant (chimeric) PCR products no longer produce spurious third alleles.
+- Default minimum allele fraction lowered from 10% to 5% of resolved reads, so under-amplified long alleles (e.g. >80 CAG) are called.
+- Configuration miscalls caused by single basecalling errors (including canonical products of CAA>CAG errors in CAA-gain alleles) are recognised and not called.
+- Repeat-adjacent sequences matching no known configuration but carried by ≥20% of resolved reads are reported as alleles with an "unclassified" configuration.
+- New flags: CAG mode differing between CCG classes of one allele (two alleles one repeat apart); CCG call supported by <60% of the allele's reads. The neighbour-bin flag is restricted to alleles ≤35 CAG.
+
+Full list of changes in [CHANGELOG.md](CHANGELOG.md).
+
+## What's new in version 2.0 (compared with 1.0)
 
 | | v1.0 | v2.0 |
 |---|---|---|
