@@ -78,7 +78,7 @@ def main(inputs: list[str] | None = None, outdir: str | None = None,
     motifv = tk.StringVar(value="CAG")
     minlen = tk.IntVar(value=100)
     minq = tk.DoubleVar(value=0.0)
-    minfrac = tk.DoubleVar(value=0.10)
+    minfrac = tk.DoubleVar(value=0.05)
     thr = tk.IntVar(value=max(1, (os.cpu_count() or 2) - 1))
     wreads = tk.BooleanVar(value=False)
     merge = tk.BooleanVar(value=False)

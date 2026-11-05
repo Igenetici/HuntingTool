@@ -25,7 +25,7 @@ class Options:
     max_length: int = 0          # 0 = no limit
     min_q: float = 0.0           # minimum mean read Q (0 = no filter)
     min_repeats: int = 5         # motif mode only
-    min_fraction: float = 0.10   # minimum fraction of informative reads to call an allele
+    min_fraction: float = 0.05   # minimum fraction of informative reads to call an allele
     min_reads: int = 10
     write_reads: bool = False
     html: bool = True
@@ -41,6 +41,7 @@ def analyze_sample(sample: Sample, outdir: str, opt: Options) -> dict:
     hap = Counter()            # (config, ccg, cag) of complete reads
     adj_of: dict[str, str] = {}
     other_adj = Counter()
+    other_hap: Counter = Counter()
     len_all = Counter()        # read length bins (10 bp) of all reads
     len_rep = Counter()        # read length bins of repeat-containing reads
     q_all = Counter()          # mean Q (integer) of all reads
@@ -81,6 +82,7 @@ def analyze_sample(sample: Sample, outdir: str, opt: Options) -> dict:
                 adj_of.setdefault(st.config, st.adj)
                 if st.config == "other":
                     other_adj[st.adj] += 1
+                    other_hap[(st.adj, st.ccg, st.cag)] += 1
             elif st.status == "incomplete_ccg":
                 cag_by_cfg_incomplete[(st.config, st.cag)] += 1
             if rw:
@@ -103,7 +105,7 @@ def analyze_sample(sample: Sample, outdir: str, opt: Options) -> dict:
         res.update(alleles=[asdict(a) for a in al], notes=[], motif_counts=dict(motif_counts),
                    genotype="/".join(str(a.cag) for a in al) or "NA")
     else:
-        alleles, notes = call_alleles(hap, adj_of, opt.min_fraction, opt.min_reads)
+        alleles, notes = call_alleles(hap, adj_of, opt.min_fraction, opt.min_reads, other_hap=other_hap)
         cfg_counts = Counter()
         for (cfg, ccg, cag), k in hap.items():
             cfg_counts[cfg] += k

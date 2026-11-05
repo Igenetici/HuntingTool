@@ -31,7 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--max-length", type=int, default=0, help="maximum read length (bp, 0 = no limit)")
     r.add_argument("--min-q", type=float, default=0.0, help="minimum mean read Phred quality (0 = no filter)")
     r.add_argument("--min-repeats", type=int, default=5, help="minimum repeat count (motif mode)")
-    r.add_argument("--min-allele-fraction", type=float, default=0.10,
+    r.add_argument("--min-allele-fraction", type=float, default=0.05,
                    help="minimum fraction of fully parsed reads supporting an allele")
     r.add_argument("--min-reads", type=int, default=10, help="minimum reads supporting an allele")
     r.add_argument("-t", "--threads", type=int, default=max(1, (os.cpu_count() or 2) - 1),

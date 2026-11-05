@@ -69,12 +69,69 @@ def _nearest(x, peaks):
     return min(peaks, key=lambda q: abs(q - x))
 
 
-def call_alleles(hap_counts: Counter, adj_of: dict, min_fraction: float = 0.10,
+def _caa_shift(adj: str) -> Optional[int]:
+    """CAG gain of the canonical read produced by a CAA>CAG error in the first CAA codon of a
+    CAA-gain adjacent sequence (CAACAG-duplication: 2; CAA-gain Gk: k); None otherwise."""
+    from .structure import CANONICAL_ADJ
+    if not adj.startswith("CAA") or adj == CANONICAL_ADJ:
+        return None
+    conv = "CAG" + adj[3:]
+    if conv.endswith(CANONICAL_ADJ) and len(conv) > len(CANONICAL_ADJ):
+        return (len(conv) - len(CANONICAL_ADJ)) // 3
+    return None
+
+
+def _window(dist: Counter, x: int, w: int) -> int:
+    return sum(dist[y] for y in range(x - w, x + w + 1))
+
+
+def _cfg_peaks(dist: Counter) -> list[int]:
+    # raw modes resolve close non-expanded alleles; smoothing stabilises the broader
+    # distributions of expanded alleles
+    # a low relative height is accepted here: candidate modes are filtered afterwards on
+    # their read support, which keeps a long allele that is under-amplified relative to a
+    # short one (e.g. >80 CAG) from being missed
+    return sorted(set([x for x in _peaks(dist, rel=0.02) if x <= 35] +
+                      [x for x in _peaks(dist, rel=0.02, smooth=True) if x > 35]))
+
+
+def _ccg_call(sub: Counter) -> tuple[Optional[int], float, Counter]:
+    """Majority CCG length of a set of reads and the share of reads supporting it."""
+    cd = Counter()
+    for (c, ccg, cag), n in sub.items():
+        if ccg is not None:
+            cd[ccg] += n
+    if not cd:
+        return None, 0.0, cd
+    best, nb = cd.most_common(1)[0]
+    return best, nb / sum(cd.values()), cd
+
+
+def call_alleles(hap_counts: Counter, adj_of: dict, min_fraction: float = 0.05,
                  min_reads: int = 10, neighbour_flag: float = 0.6,
-                 split_ratio: float = 0.25) -> tuple[list[Allele], list[str]]:
+                 split_ratio: float = 0.25, config_error_ratio: float = 0.2,
+                 other_hap: Optional[Counter] = None, unclassified_fraction: float = 0.2
+                 ) -> tuple[list[Allele], list[str]]:
     """hap_counts: Counter[(config, ccg, cag)] of complete reads.
     adj_of: config -> representative adjacent sequence (for fragment equivalents).
-    Returns (alleles sorted by CAG, sample-level notes)."""
+    other_hap: optional Counter[(adjacent_sequence, ccg, cag)] of complete reads whose
+    repeat-adjacent sequence matched no known configuration. A sequence carried by at least
+    `unclassified_fraction` of the resolved reads (far above the basecalling-error
+    background) is treated as an allele with an unclassified configuration.
+    Returns (alleles sorted by CAG, sample-level notes).
+
+    1. CAG modes are searched separately within each repeat-adjacent configuration, so
+       alleles with different configurations are never merged, and each mode is scored by
+       the reads within +/-1 CAG (+/-2 above 35 CAG) of it. Broad tails (PCR stutter and
+       truncated products) therefore do not inflate the support of a neighbouring allele.
+    2. Up to two modes are retained; a minor mode of a non-canonical configuration lying
+       within 3 CAG of a much larger mode is treated as a configuration miscall.
+    3. The CCG length of each allele is the majority CCG length of its reads. A single CAG
+       mode is split into two alleles only when its reads show two well-separated CCG
+       lengths (two alleles of equal or adjacent CAG length distinguished by CCG); when two
+       CAG modes are present no CCG split is attempted, because recombinant (chimeric)
+       PCR products carry the CAG tract of one allele and the CCG tract of the other.
+    """
     from .structure import fragment_equivalent
 
     notes: list[str] = []
@@ -83,71 +140,122 @@ def call_alleles(hap_counts: Counter, adj_of: dict, min_fraction: float = 0.10,
     if N == 0:
         return [], ["no read with a resolved repeat-adjacent configuration"]
     thr = max(min_reads, min_fraction * N)
-    cag_dist: Counter = Counter()
+    if other_hap:
+        tot_adj = Counter()
+        for (adj, ccg, cag), n in other_hap.items():
+            tot_adj[adj] += n
+        for adj, n in tot_adj.items():
+            if n >= max(min_reads, unclassified_fraction * N):
+                for (a2, ccg, cag), k in other_hap.items():
+                    if a2 == adj:
+                        res[(f"unclassified [{adj}]", ccg, cag)] += k
+    by_cfg: dict[str, Counter] = defaultdict(Counter)
     for (cfg, ccg, cag), n in res.items():
-        cag_dist[cag] += n
-    # raw modes resolve close non-expanded alleles; smoothing stabilises the broader
-    # distributions of expanded alleles
-    peaks = sorted(set([x for x in _peaks(cag_dist) if x <= 35] +
-                       [x for x in _peaks(cag_dist, smooth=True) if x > 35]))
+        by_cfg[cfg][cag] += n
 
-    # assign reads to CAG modes
-    groups: dict[int, Counter] = defaultdict(Counter)
-    for (cfg, ccg, cag), n in res.items():
-        groups[_nearest(cag, peaks)][(cfg, ccg, cag)] += n
+    cands = []  # (support, cfg, mode)
+    for cfg, dist in by_cfg.items():
+        if sum(dist.values()) < min_reads:
+            continue
+        for pk in _cfg_peaks(dist):
+            cands.append((_window(dist, pk, 1 if pk <= 35 else 2), cfg, pk))
+    cands.sort(key=lambda c: (-c[0], c[2]))
 
-    cands: list[tuple[Allele, Counter]] = []
-    for pk, g in groups.items():
-        # split by configuration when two configurations are both well supported
-        by_cfg = Counter()
-        for (cfg, ccg, cag), n in g.items():
-            by_cfg[cfg] += n
-        top = by_cfg.most_common()
-        cfgs = [top[0][0]] + [c for c, n in top[1:2] if n >= split_ratio * top[0][1] and n >= thr]
-        for cfg in cfgs:
-            sub = Counter({k: v for k, v in g.items() if k[0] == cfg}) if len(cfgs) > 1 else g
-            ccg_dist = Counter()
-            for (c, ccg, cag), n in sub.items():
-                if c == cfg and ccg is not None:
-                    ccg_dist[ccg] += n
-            cpk = _peaks(ccg_dist, rel=split_ratio, valley=0.6) or [None]
-            for cp in cpk:
-                ss = Counter({k: v for k, v in sub.items()
-                              if cp is None or k[1] is None or _nearest(k[1], cpk) == cp})
-                if len(cpk) > 1 and sum(ss.values()) < thr:
-                    continue
-                cd = Counter()
-                for (c, ccg, cag), n in ss.items():
-                    cd[cag] += n
-                mode = max(cd, key=lambda x: (cd[x], -abs(x - pk)))
-                a = Allele(mode, cfg, cp, sum(ss.values()))
-                a.neighbour_ratio = max(cd[mode - 1], cd[mode + 1]) / cd[mode]
-                same = sum(n for (c, ccg, cag), n in ss.items() if c == cfg)
-                a.config_purity = 100.0 * same / a.support
-                cands.append((a, ss))
+    accepted: list[tuple[int, str, int]] = []
+    others: list[tuple[int, str, int]] = []
+    for s, cfg, pk in cands:
+        if s < thr:
+            continue
+        miscall = any(cfg != "canonical" and acfg != cfg and abs(apk - pk) <= 3 and s < config_error_ratio * asup
+                      for asup, acfg, apk in accepted)
+        # a single CAA>CAG basecalling error in the first CAA codon of a CAA-gain allele
+        # (e.g. CAACAG-duplication) yields a canonical read k repeats longer
+        miscall = miscall or any(cfg == "canonical" and _caa_shift(adj_of.get(acfg, "")) == pk - apk
+                                 and s < config_error_ratio * asup for asup, acfg, apk in accepted)
+        if miscall or len(accepted) == 2:
+            others.append((s, cfg, pk))
+        else:
+            accepted.append((s, cfg, pk))
+    if others:
+        notes.append("additional minor modes not called: " +
+                     ", ".join(f"{pk}{'' if cfg == 'canonical' else ' ' + cfg} ({s})" for s, cfg, pk in others))
 
-    called = [a for a, _ in cands if a.support >= thr]
-    called.sort(key=lambda a: -a.support)
-    if len(called) > 2:
-        notes.append("more than two allele candidates above threshold: " +
-                     ", ".join(a.label + f" ({a.support})" for a in called))
-        called = called[:2]
+    def reads_of(cfg, pk):
+        w = 1 if pk <= 35 else 2
+        return Counter({k: v for k, v in res.items() if k[0] == cfg and abs(k[2] - pk) <= w})
+
+    called: list[Allele] = []
+    for s, cfg, pk in accepted:
+        sub = reads_of(cfg, pk)
+        ccg, share, cd = _ccg_call(sub)
+        split = None
+        if len(accepted) == 1:
+            cpk = _peaks(cd, rel=split_ratio, valley=0.6)
+            cpk = [c for c in cpk if c is not None]
+            if len(cpk) >= 2:
+                cpk = sorted(cpk, key=lambda c: -cd[c])[:2]
+                if abs(cpk[0] - cpk[1]) >= 2 and cd[cpk[1]] >= thr:
+                    split = cpk
+        groups = []
+        if split:
+            # widen the CAG window so that two alleles one CAG apart are both captured
+            wide = Counter({k: v for k, v in res.items() if k[0] == cfg and abs(k[2] - pk) <= 2})
+            for cp in split:
+                groups.append((cp, Counter({k: v for k, v in wide.items()
+                                            if k[1] is not None and _nearest(k[1], split) == cp})))
+        else:
+            groups.append((ccg, sub))
+        for cp, g in groups:
+            cdist = Counter()
+            for (c, gg, cag), n in g.items():
+                cdist[cag] += n
+            mode = max(cdist, key=lambda x: (cdist[x], -abs(x - pk)))
+            a = Allele(mode, cfg, cp, sum(g.values()))
+            full = by_cfg[cfg]
+            a.neighbour_ratio = max(full[mode - 1], full[mode + 1]) / full[mode] if full[mode] else 0.0
+            _, sh, _ = _ccg_call(g)
+            a.config_purity = 100.0 * sum(n for (c, gg, cag), n in res.items() if abs(cag - mode) <= (1 if mode <= 35 else 2)
+                                          and c == cfg) / max(1, sum(n for (c, gg, cag), n in res.items()
+                                                                     if abs(cag - mode) <= (1 if mode <= 35 else 2)))
+            if not split and sh < 0.6:
+                a.flags.append(f"CCG length supported by {sh * 100:.0f}% of the allele's reads")
+            called.append(a)
+
     tot = sum(a.support for a in called) or 1
     for a in called:
         a.fraction = a.support / tot
-        a.fe_cag = fragment_equivalent(a.cag, adj_of.get(a.config, ""))
-        if a.neighbour_ratio >= neighbour_flag:
+        if a.config.startswith("unclassified"):
+            a.fe_cag = None
+            a.flags.append("repeat-adjacent sequence not matching any known configuration "
+                           "(sequence shown); confirm by an orthogonal method")
+        else:
+            a.fe_cag = fragment_equivalent(a.cag, adj_of.get(a.config, ""))
+        if a.cag <= 35 and a.neighbour_ratio >= neighbour_flag:
             a.flags.append(f"neighbour bin >= {int(neighbour_flag * 100)}% of mode: possible second allele "
                            "differing by one CAG repeat")
-        if a.config_purity < 70:
-            a.flags.append(f"configuration supported by {a.config_purity:.0f}% of the allele's resolved reads")
     if len(called) == 1:
         a = called[0]
         notes.append("single allele detected (homozygous or unresolved)")
-        if a.neighbour_ratio >= neighbour_flag:
-            other = a.cag - 1 if cag_dist[a.cag - 1] >= cag_dist[a.cag + 1] else a.cag + 1
+        if a.cag <= 35 and a.neighbour_ratio >= neighbour_flag:
+            full = by_cfg[a.config]
+            other = a.cag - 1 if full[a.cag - 1] >= full[a.cag + 1] else a.cag + 1
             notes.append(f"possible genotype {min(a.cag, other)}/{max(a.cag, other)} "
                          "(two alleles differing by one CAG repeat, not resolved by CCG or configuration)")
+        if a.cag <= 35:
+            # CAG mode within each well-represented CCG length: a one-repeat shift between
+            # CCG classes supports two alleles of adjacent CAG length
+            near = Counter({k: v for k, v in res.items() if k[0] == a.config and abs(k[2] - a.cag) <= 2
+                            and k[1] is not None})
+            tot_near = sum(near.values())
+            per: dict[int, Counter] = defaultdict(Counter)
+            for (c, ccg, cag), n in near.items():
+                per[ccg][cag] += n
+            modes = {g: max(cd, key=cd.get) for g, cd in per.items()
+                     if sum(cd.values()) >= max(min_reads, 0.15 * tot_near)}
+            if len(set(modes.values())) > 1:
+                notes.append("CAG mode differs between CCG classes (" +
+                             ", ".join(f"CCG{g}: {m}" for g, m in sorted(modes.items())) +
+                             "): supports two alleles of adjacent CAG length")
     if len(called) == 2:
         mn = min(a.support for a in called) / max(a.support for a in called)
         if mn < 0.33:
