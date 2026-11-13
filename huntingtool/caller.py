@@ -25,7 +25,8 @@ class Allele:
     fraction: float = 0.0
     fe_cag: Optional[int] = None           # fragment-analysis-equivalent CAG count
     config_purity: float = 0.0             # % of resolved reads of this allele carrying its configuration
-    neighbour_ratio: float = 0.0           # max(count[mode-1], count[mode+1]) / count[mode]
+    neighbour_ratio: float = 0.0           # max(count[cag-1], count[cag+1]) / count[cag]
+    mode_cag: Optional[int] = None         # most frequent CAG count of the allele's reads (before stutter-aware calling)
     flags: list[str] = field(default_factory=list)
 
     @property
@@ -110,7 +111,8 @@ def _ccg_call(sub: Counter) -> tuple[Optional[int], float, Counter]:
 def call_alleles(hap_counts: Counter, adj_of: dict, min_fraction: float = 0.05,
                  min_reads: int = 10, neighbour_flag: float = 0.6,
                  split_ratio: float = 0.25, config_error_ratio: float = 0.2,
-                 other_hap: Optional[Counter] = None, unclassified_fraction: float = 0.2
+                 other_hap: Optional[Counter] = None, unclassified_fraction: float = 0.2,
+                 stutter_ratio: float = 0.8, stutter_min_cag: int = 36
                  ) -> tuple[list[Allele], list[str]]:
     """hap_counts: Counter[(config, ccg, cag)] of complete reads.
     adj_of: config -> representative adjacent sequence (for fragment equivalents).
@@ -131,6 +133,13 @@ def call_alleles(hap_counts: Counter, adj_of: dict, min_fraction: float = 0.05,
        lengths (two alleles of equal or adjacent CAG length distinguished by CCG); when two
        CAG modes are present no CCG split is attempted, because recombinant (chimeric)
        PCR products carry the CAG tract of one allele and the CCG tract of the other.
+    4. Stutter-aware sizing of expanded alleles (mode >= `stutter_min_cag`): PCR stutter
+       mainly removes repeats, and in expanded alleles the n-1 product is almost as abundant
+       as the full-length product, so that the most frequent count falls on n-1 in about
+       half of the samples. The allele is therefore assigned the longest CAG count, within
+       2 repeats of the mode, whose read count is at least `stutter_ratio` of that of the
+       mode. The mode is kept in `mode_cag`, and the allele is flagged when the two differ.
+       `stutter_ratio=0` disables this step (v2.1.0 behaviour).
     """
     from .structure import fragment_equivalent
 
@@ -210,8 +219,18 @@ def call_alleles(hap_counts: Counter, adj_of: dict, min_fraction: float = 0.05,
             for (c, gg, cag), n in g.items():
                 cdist[cag] += n
             mode = max(cdist, key=lambda x: (cdist[x], -abs(x - pk)))
-            a = Allele(mode, cfg, cp, sum(g.values()))
             full = by_cfg[cfg]
+            raw_mode = mode
+            if stutter_ratio and mode >= stutter_min_cag:
+                top = max(full[k] for k in range(mode - 2, mode + 3))
+                mode = max(k for k in range(mode - 2, mode + 3) if full[k] >= stutter_ratio * top)
+            a = Allele(mode, cfg, cp, sum(g.values()))
+            a.mode_cag = raw_mode
+            if mode != raw_mode:
+                a.flags.append("stutter-aware call: longest CAG count with at least "
+                               f"{int(round(stutter_ratio * 100))}% of the reads of the most frequent count "
+                               f"({raw_mode} CAG: {full[raw_mode]} reads; {mode} CAG: {full[mode]} reads); "
+                               "repeat count uncertain by 1 repeat")
             a.neighbour_ratio = max(full[mode - 1], full[mode + 1]) / full[mode] if full[mode] else 0.0
             _, sh, _ = _ccg_call(g)
             a.config_purity = 100.0 * sum(n for (c, gg, cag), n in res.items() if abs(cag - mode) <= (1 if mode <= 35 else 2)
