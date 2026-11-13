@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.2.0 - 2026-11
+
+Stutter-aware sizing of expanded alleles.
+
+- In expanded alleles the n−1 PCR-stutter product is almost as abundant as the full-length product, and reverse-strand reads (not analysed by v1.0.0) are on average slightly shorter than forward-strand reads; in v2.1.0 the most frequent CAG count therefore fell one repeat below the fragment-analysis size in about half of the expanded alleles. For alleles of 36 CAG or more, the allele is now assigned the longest CAG count, within 2 repeats of the most frequent count, that is supported by at least 80% of the reads of the most frequent count.
+- The most frequent count is reported as `mode_cag`; alleles whose call differs from it are flagged ("stutter-aware call ... repeat count uncertain by 1 repeat").
+- Alleles of 35 CAG or fewer are called as in v2.1.0. `stutter_ratio=0` in `call_alleles` restores the v2.1.0 behaviour.
+- The 80% threshold was set on the study datasets (results unchanged between 70% and 80%); it depends on the PCR protocol and should be verified when the protocol changes.
+
 ## 2.1.0 - 2026-11
 
 Allele caller revised after re-analysis of the study datasets (R10.4.1, 63 barcodes).

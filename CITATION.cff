@@ -5,7 +5,7 @@ type: software
 authors:
   - family-names: Fabiani
     given-names: Marco
-version: 2.1.0
+version: 2.2.0
 date-released: 2026-11-05
 repository-code: "https://github.com/Igenetici/HuntingTool"
 abstract: "Sequence-resolved HTT CAG-repeat genotyping and repeat-adjacent variant phasing from amplicon long reads (GUI and command line)."

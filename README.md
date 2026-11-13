@@ -6,6 +6,10 @@ It runs from a **graphical interface** or from the **command line**, on Linux, m
 
 > Research use. Results must be interpreted by qualified personnel and, when clinically relevant, confirmed with validated diagnostic methods.
 
+## What's new in version 2.2
+
+Stutter-aware sizing of expanded alleles. In alleles of 36 CAG or more the PCR n−1 product is almost as abundant as the full-length product, and reverse-strand reads are on average slightly shorter than forward-strand reads, so the most frequent CAG count fell one repeat below the fragment-analysis size in about half of the expanded alleles of the study datasets. The allele is now assigned the longest CAG count, within two repeats of the most frequent count, supported by at least 80% of the reads of the most frequent count; alleles whose call differs from the most frequent count are flagged ("repeat count uncertain by 1 repeat"). Alleles of 35 CAG or fewer are unchanged. See CHANGELOG.md.
+
 ## What's new in version 2.1
 
 The allele caller was revised after re-analysis of the study datasets (R10.4.1, 63 barcodes):
@@ -144,6 +148,7 @@ Nomenclature follows the GeM-HD Consortium (*Nat Genet* 2025).
 4. An allele is called when its score reaches 5% of resolved reads (and at least 10 reads); at most two alleles are reported and additional modes are listed in the notes. A minor mode of a non-canonical configuration lying within 3 CAG of a mode at least five times larger is treated as a configuration miscall (a single basecalling error in the CAA or CCA codon) and is not called; the same applies to a minor canonical mode located k repeats above a CAA-gain allele (k = 2 for CAACAG-duplication), the product of a CAA>CAG error in its first CAA codon. Repeat-adjacent sequences matching no known configuration but carried by ≥20% of resolved reads are reported as an allele with an *unclassified* configuration.
 5. The CCG length of each allele is the majority CCG length of its reads (flagged when supported by <60% of them). When a single CAG mode is found, it is split into two alleles if its reads show two CCG lengths at least two repeats apart, each with ≥25% of the reads (alleles of equal or adjacent CAG length distinguished by CCG). When two CAG modes are present no CCG split is attempted, because recombinant (chimeric) PCR products carry the CAG tract of one allele and the CCG tract of the other.
 6. For alleles ≤35 CAG, a neighbouring bin reaching 60% of the mode is flagged as a possible second allele differing by one repeat.
+7. Stutter-aware sizing of expanded alleles (≥36 CAG). PCR stutter mainly removes repeats and, in expanded alleles, the n−1 product is almost as abundant as the full-length product, so the most frequent CAG count falls on n−1 in about half of the samples. The allele is assigned the longest CAG count, within 2 repeats of the most frequent count, supported by at least 80% of the reads of the most frequent count. When this differs from the most frequent count the allele is flagged, and the repeat count should be regarded as uncertain by one repeat. The threshold was set on the datasets of the accompanying study and depends on the PCR protocol.
 
 On simulated amplicon reads (random indels and substitutions, both strands, unbalanced alleles), the exact genotype, configuration and CCG were recovered in 100% of heterozygous cases at 2% and 5% per-base error. At 8% error, most discrepancies were ±1 repeat on expanded alleles. Run `pytest` to reproduce the tests.
 
