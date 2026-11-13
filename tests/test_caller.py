@@ -68,3 +68,35 @@ def test_dup_conversion_product_not_called():
     h = _stutter(15, 8, 1800, cfg="CAACAG-dup", tail=0.3) + _stutter(17, 8, 210, tail=0.6) + _stutter(20, 7, 180)
     al, notes = call_alleles(h, {"canonical": "CAACAGCCGCCA", "CAACAG-dup": "CAACAGCAACAGCCGCCA"})
     assert [(a.cag, a.config) for a in al] == [(15, "CAACAG-dup"), (20, "canonical")]
+
+
+def _expanded(n_true, n, ccg=7, minus1=0.97, plus1=0.3):
+    """Expanded-allele profile observed in real data: n-1 almost as high as n, sharp drop at n+1."""
+    h = Counter()
+    for d, f in ((-4, 0.2), (-3, 0.38), (-2, 0.66), (-1, minus1), (0, 1.0), (1, plus1), (2, 0.07)):
+        h[("canonical", ccg, n_true + d)] += int(n * f)
+    return h
+
+
+def test_stutter_aware_call_when_n_minus_1_is_the_mode():
+    # as in real 17/40 samples: 39 CAG slightly more frequent than 40 CAG
+    h = _stutter(17, 7, 3000) + _expanded(40, 1200, minus1=1.04)
+    al, _ = call_alleles(h, ADJ)
+    assert [a.cag for a in al] == [17, 40]
+    assert al[1].mode_cag == 39 and any("stutter-aware" in f for f in al[1].flags)
+    al, _ = call_alleles(h, ADJ, stutter_ratio=0)
+    assert [a.cag for a in al] == [17, 39]
+
+
+def test_stutter_aware_call_keeps_mode_when_it_is_the_longest_abundant_count():
+    h = _stutter(17, 7, 3000) + _expanded(40, 1200, minus1=0.95)
+    al, _ = call_alleles(h, ADJ)
+    assert [a.cag for a in al] == [17, 40]
+    assert al[1].mode_cag == 40 and not any("stutter-aware" in f for f in al[1].flags)
+
+
+def test_stutter_aware_call_not_applied_below_36():
+    h = _stutter(17, 7, 3000) + Counter({("canonical", 7, 26): 1000, ("canonical", 7, 27): 900,
+                                         ("canonical", 7, 25): 500, ("canonical", 7, 28): 100})
+    al, _ = call_alleles(h, ADJ)
+    assert [a.cag for a in al] == [17, 26]
